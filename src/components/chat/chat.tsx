@@ -102,9 +102,14 @@ export const Chat = memo(function Chat({
   const router = useRouter()
   const listChanged = useListChanged()
   const { data } = useSearch({ from: "/_app" })
+  // The first message waits for the socket to open: one sent sooner is
+  // queued on the socket, and useAgent can swap that socket for a new one
+  // before it opens (it did on every first send in dev), losing it.
+  const [open, setOpen] = useState(false)
   const agent = useAgent({
     agent: "ChatAgent",
     basePath: `api/chats/${id}`,
+    onOpen: () => setOpen(true),
     onMessage: (event) => {
       if (event.data === CHATS_CHANGED) void listChanged()
       if (event.data === CHAT_DELETED) void router.navigate({ to: "/" })
@@ -134,7 +139,7 @@ export const Chat = memo(function Chat({
   )
 
   useEffect(() => {
-    if (firstMessage === undefined || sent.current) return
+    if (firstMessage === undefined || sent.current || !open) return
     sent.current = true
     onFirstSent?.()
     const files = takeHandedOffFiles(id)
@@ -148,7 +153,7 @@ export const Chat = memo(function Chat({
       parts: questionParts(firstMessage.text, files),
       metadata: sentWith(firstMessage.model),
     })
-  }, [firstMessage, sendMessage, onFirstSent, id])
+  }, [firstMessage, sendMessage, onFirstSent, id, open])
 
   // isStreaming also covers a reply another tab started.
   const previewing = previewEnabled && data !== undefined
